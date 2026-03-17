@@ -1,3 +1,6 @@
+from ast import List
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from decimal import Decimal
@@ -104,9 +107,48 @@ def expense_summary(
         Expense.user_id == current_user.id
     ).all()
 
-    summary: dict[int, Decimal] = {}
+    total_expense = sum((e.amount for e in expenses), Decimal("0"))
 
+    category_breakdown = {}
     for e in expenses:
-        summary[e.category_id] = summary.get(e.category_id, Decimal("0")) + e.amount
+        category = db.query(Category).filter(Category.id == e.category_id).first()
+        if category:
+            category_name = category.name
+            category_breakdown[category_name] = category_breakdown.get(category_name, Decimal("0")) + e.amount
 
-    return summary
+    return {
+    "total_expense": float(total_expense),
+    "category_breakdown": {
+        k: float(v) for k, v in category_breakdown.items()
+    }
+}
+
+# // ---------------- RECENT EXPENSES ----------------
+
+@router.get("/")
+def get_expenses(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    expenses = (
+        db.query(Expense, Category.name.label("category"))
+        .join(Category, Expense.category_id == Category.id)
+        .filter(Expense.user_id == current_user.id)
+        .order_by(Expense.date.desc())
+        .limit(10)
+        .all()
+    )
+
+    result = []
+    for expense, category_name in expenses:
+        result.append({
+            "id": expense.id,
+            "amount": expense.amount,
+            "date": expense.date,
+            "description": expense.description,
+            "category": category_name,
+            "auto_categorized": expense.auto_categorized
+        })
+
+    return {"expenses": result}
