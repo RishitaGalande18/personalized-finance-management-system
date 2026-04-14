@@ -17,6 +17,7 @@ def trigger_alerts(
     return {"message": "Alerts generated"}
 
 
+@router.get("")
 @router.get("/")
 def get_alerts(
     db: Session = Depends(get_db),

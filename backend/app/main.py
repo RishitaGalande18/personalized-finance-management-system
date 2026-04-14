@@ -1,9 +1,19 @@
 from fastapi import FastAPI
-from app.routers import auth, income, expense, goal, category, insights, investment, debt, health, alert, assistant
+from app.routers import auth, income, expense, goal, category, insights, investment, debt, health, alert
 from app.core.scheduler import start_scheduler
+from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI(title="Personalized Finance Management System")
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 app.include_router(auth.router)
@@ -16,7 +26,7 @@ app.include_router(investment.router)
 app.include_router(debt.router)
 app.include_router(health.router)
 app.include_router(alert.router)
-app.include_router(assistant.router)
+
 
 @app.get("/")
 def root():
