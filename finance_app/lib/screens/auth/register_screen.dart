@@ -1,13 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-class RegisterScreen extends StatelessWidget {
+import '../../providers/auth_provider.dart';
+
+class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
+
+  @override
+  State<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends State<RegisterScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleRegister() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await context.read<AuthProvider>().register(
+            _nameController.text.trim(),
+            _emailController.text.trim(),
+            _passwordController.text.trim(),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Account created successfully! Please sign in.'),
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (error) {
+      final message = error is Exception ? error.toString() : 'Registration failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB), // Exact light gray background
+      backgroundColor: const Color(0xFFF8F9FB),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -15,8 +73,6 @@ class RegisterScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 80),
-              
-              // App Icon Top
               Container(
                 width: 64,
                 height: 64,
@@ -31,8 +87,6 @@ class RegisterScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              
-              // Titles
               Text(
                 'Create Account',
                 style: GoogleFonts.poppins(
@@ -51,33 +105,38 @@ class RegisterScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 54),
-              
-              // Email Input
-              const _FigmaInput(
-                label: 'EMAIL ADDRESS',
-                hint: 'name@example.com',
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 24),
-              
-              // Password Input
-              const _FigmaInput(
-                label: 'PASSWORD',
-                hint: '••••••••',
-                obscureText: true,
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _FigmaInput(
+                      label: 'FULL NAME',
+                      hint: 'Srushti Sharma',
+                      controller: _nameController,
+                    ),
+                    const SizedBox(height: 24),
+                    _FigmaInput(
+                      label: 'EMAIL ADDRESS',
+                      hint: 'name@example.com',
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 24),
+                    _FigmaInput(
+                      label: 'PASSWORD',
+                      hint: '••••••••',
+                      obscureText: true,
+                      controller: _passwordController,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 54),
-              
-              // Sign Up Button
               _FigmaButton(
-                text: 'Sign Up',
-                onPressed: () {
-                  // Handle Sign Up
-                },
+                text: _isLoading ? 'Creating account...' : 'Sign Up',
+                onPressed: _isLoading ? () {} : _handleRegister,
               ),
               const SizedBox(height: 32),
-              
-              // Sign In Text
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -97,7 +156,7 @@ class RegisterScreen extends StatelessWidget {
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: const Color(0xFF4C3DEC), // Exact Purple
+                        color: const Color(0xFF4C3DEC),
                       ),
                     ),
                   ),
@@ -112,17 +171,17 @@ class RegisterScreen extends StatelessWidget {
   }
 }
 
-// ── Reusable Inner Widgets for exact Figma Matching ──
-
 class _FigmaInput extends StatelessWidget {
   final String label;
   final String hint;
   final bool obscureText;
   final TextInputType keyboardType;
+  final TextEditingController controller;
 
   const _FigmaInput({
     required this.label,
     required this.hint,
+    required this.controller,
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
   });
@@ -137,7 +196,7 @@ class _FigmaInput extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFF8A8A9E), // Light gray caps
+            color: const Color(0xFF8A8A9E),
             letterSpacing: 0.5,
           ),
         ),
@@ -148,15 +207,22 @@ class _FigmaInput extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: const Color(0xFFEaeaef), // Very soft border
+              color: const Color(0xFFEaeaef),
               width: 1.5,
             ),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           alignment: Alignment.centerLeft,
-          child: TextField(
+          child: TextFormField(
+            controller: controller,
             obscureText: obscureText,
             keyboardType: keyboardType,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'This field is required';
+              }
+              return null;
+            },
             style: GoogleFonts.inter(
               fontSize: 15,
               color: const Color(0xFF1E1E2D),
@@ -194,11 +260,11 @@ class _FigmaButton extends StatelessWidget {
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFF4C3DEC), // Figma Purple
+        color: const Color(0xFF4C3DEC),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4C3DEC).withOpacity(0.25),
+            color: const Color(0x404C3DEC),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),

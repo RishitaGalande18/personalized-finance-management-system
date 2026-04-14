@@ -5,9 +5,9 @@ class AppColors {
   AppColors._();
 
   // ── Primary ──
-  static const Color primary = Color(0xFF4C3DEC); // Vibrant Violet from Figma
-  static const Color primaryLight = Color(0xFF6E62F0);
-  static const Color primaryDark = Color(0xFF3B2EB1);
+  static const Color primary = Color(0xFF102A6A); // Navy blue
+  static const Color primaryLight = Color(0xFF3755A3);
+  static const Color primaryDark = Color(0xFF091A3C);
 
   // ── Background & Surfaces ──
   static const Color background = Color(0xFFF8F9FB); // Clean off-white
@@ -55,19 +55,19 @@ class AppColors {
   static const Color textHint = Color(0xFF6C6C80);
 
   // ── Accents ──
-  static const Color accent = Color(0xFF5C61F2);
+  static const Color accent = Color(0xFF6F7DF2);
   static const Color accentPink = Color(0xFFFF6B81);
   static const Color accentOrange = Color(0xFFF39C12);
 
   // ── Gradients ──
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF4C3DEC), Color(0xFF6E62F0)],
+    colors: [Color(0xFF102A6A), Color(0xFF3755A3)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF22223A), Color(0xFF2A2A40)],
+    colors: [Color(0xFF0F1D41), Color(0xFF102A6A)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

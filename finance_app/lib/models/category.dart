@@ -4,6 +4,7 @@ class Category {
   final int? id;
   final String name;
   final int? budgetLimit;
+  final double spent;
   final IconData icon;
   final Color color;
 
@@ -11,6 +12,7 @@ class Category {
     this.id,
     required this.name,
     this.budgetLimit,
+    this.spent = 0,
     this.icon = Icons.category_rounded,
     this.color = const Color(0xFF6C5CE7),
   });
@@ -19,7 +21,10 @@ class Category {
     return Category(
       id: json['id'],
       name: json['name'] ?? '',
-      budgetLimit: json['budget_limit'],
+      budgetLimit: json['budget_limit'] != null
+          ? (json['budget_limit'] as num).toInt()
+          : null,
+      spent: json['spent'] != null ? (json['spent'] as num).toDouble() : 0,
     );
   }
 

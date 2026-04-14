@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
-// Note: Keeping app_theme.dart available but overriding to Light for these specific UI designs
-import 'screens/auth/splash_screen.dart';
+import 'core/theme/app_theme.dart';
+import 'features/auth/login_screen.dart';
+import 'features/auth/register_screen.dart';
+import 'features/navigation/main_navigation.dart';
+import 'features/expense/add_expense_screen.dart';
+import 'features/expense/expense_list_screen.dart';
+import 'features/income/income_screen.dart';
+import 'features/health/health_alerts_screen.dart';
+import 'features/investment/add_investment_screen.dart';
+import 'features/debt/add_debt_screen.dart';
+import 'features/goal/add_goal_screen.dart';
 
 void main() {
   runApp(const FinanceApp());
@@ -12,18 +21,21 @@ class FinanceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FinSmart',
       debugShowCheckedModeBanner: false,
-      // Switching to a pristine light theme to match the Figma screenshots
-      theme: ThemeData(
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF8F9FB),
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFF4C3DEC),
-        ),
-        useMaterial3: true,
-      ),
-      home: const SplashScreen(),
+      theme: AppTheme.darkTheme,
+      home: const LoginScreen(),
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegisterScreen(),
+        '/home': (context) => const MainNavigation(),
+        '/add-expense': (context) => const AddExpenseScreen(),
+        '/expenses': (context) => const ExpenseListScreen(),
+        '/income': (context) => const IncomeManagementScreen(),
+        '/health-alerts': (context) => const HealthAlertsScreen(),
+        '/add-investment': (context) => const AddInvestmentScreen(),
+        '/add-debt': (context) => const AddDebtScreen(),
+        '/add-goal': (context) => const AddGoalScreen(),
+      },
     );
   }
 }

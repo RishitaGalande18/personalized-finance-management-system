@@ -32,7 +32,7 @@ class _DashboardShellState extends State<DashboardShell> {
       bottomNavigationBar: Container(
         height: 88,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.primaryDark,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           boxShadow: [
             BoxShadow(
@@ -68,7 +68,7 @@ class _DashboardShellState extends State<DashboardShell> {
           Icon(
             selected ? selectedIcon : icon,
             size: 28,
-            color: selected ? AppColors.primary : const Color(0xFFB0B3C6),
+            color: selected ? Colors.white : const Color(0xFFB0B3C6),
           ),
           const SizedBox(height: 4),
           if (selected)
@@ -76,7 +76,7 @@ class _DashboardShellState extends State<DashboardShell> {
               width: 4,
               height: 4,
               decoration: const BoxDecoration(
-                color: AppColors.primary,
+                color: Colors.white,
                 shape: BoxShape.circle,
               ),
             ),

@@ -128,23 +128,29 @@ class _CustomButtonState extends State<CustomButton>
         height: 22,
         child: CircularProgressIndicator(
           strokeWidth: 2.5,
-          color: AppColors.textPrimary,
+          color: Colors.white,
         ),
       );
     }
+
+    final contentColor = widget.isOutlined
+        ? AppColors.primary
+        : widget.onPressed == null
+            ? AppColors.textPrimary
+            : Colors.white;
 
     if (widget.icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(widget.icon, size: 20, color: AppColors.textPrimary),
+          Icon(widget.icon, size: 20, color: contentColor),
           const SizedBox(width: 8),
           Text(
             widget.text,
             style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: contentColor,
             ),
           ),
         ],
@@ -156,9 +162,7 @@ class _CustomButtonState extends State<CustomButton>
       style: GoogleFonts.inter(
         fontSize: 15,
         fontWeight: FontWeight.w600,
-        color: widget.isOutlined
-            ? AppColors.primary
-            : AppColors.textPrimary,
+        color: contentColor,
       ),
     );
   }
