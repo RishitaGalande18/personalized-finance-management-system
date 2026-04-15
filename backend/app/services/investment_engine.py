@@ -23,7 +23,8 @@ def update_investment_value(investment):
     elif investment.investment_type == "STOCK":
         return calculate_stock(
             investment.quantity,
-            investment.buy_price
+            investment.buy_price,
+            investment.symbol
         )
 
     return investment.principal_amount

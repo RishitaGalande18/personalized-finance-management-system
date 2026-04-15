@@ -140,4 +140,19 @@ class ApiService {
           'Unable to create category: ${response.statusCode} ${response.body}');
     }
   }
+
+  static Future<Map<String, dynamic>> getPortfolio(String token) async {
+  final response = await http.get(
+    Uri.parse('$baseUrl/investment/portfolio'),
+    headers: _authHeaders(token),
+  );
+
+  if (response.statusCode != 200) {
+    throw Exception(
+      'Unable to load portfolio: ${response.statusCode} ${response.body}'
+    );
+  }
+
+  return jsonDecode(response.body);
+}
 }

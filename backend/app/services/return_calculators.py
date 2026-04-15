@@ -1,5 +1,6 @@
 from decimal import Decimal, getcontext
 from datetime import date
+import yfinance as yf
 
 getcontext().prec = 10
 
@@ -36,12 +37,25 @@ def calculate_sip(principal, rate, start_date):
     return future_value.quantize(Decimal("0.01"))
 
 
-def calculate_stock(quantity, buy_price, simulated_growth=Decimal("0.12")):
+def calculate_stock(quantity, buy_price, symbol=None):
     if not quantity or not buy_price:
-        return Decimal(0)
+        return Decimal("0")
 
-    return (
-        Decimal(quantity) *
-        Decimal(buy_price) *
-        (Decimal(1) + simulated_growth)
-    ).quantize(Decimal("0.01"))
+    try:
+        if not symbol:
+            return Decimal(quantity) * Decimal(buy_price)
+
+        import yfinance as yf
+        stock = yf.Ticker(symbol)
+        data = stock.history(period="1d")
+
+        if data.empty:
+            return Decimal(quantity) * Decimal(buy_price)
+
+        live_price = Decimal(str(data["Close"].iloc[-1]))
+
+        return (Decimal(quantity) * live_price).quantize(Decimal("0.01"))
+
+    except Exception as e:
+        print("Stock fetch error:", e)
+        return (Decimal(quantity) * Decimal(buy_price)).quantize(Decimal("0.01"))

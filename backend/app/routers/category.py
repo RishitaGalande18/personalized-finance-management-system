@@ -74,5 +74,6 @@ def update_category_limit(
 @router.get("/")
 def get_categories(
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)):
+    current_user: User = Depends(get_current_user)
+):
     return db.query(Category).filter(Category.user_id == current_user.id).all()
