@@ -1,4 +1,5 @@
 from datetime import date
+from operator import inv
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -11,6 +12,7 @@ from app.utils.auth_dependencies import get_current_user
 from app.models.user import User
 
 from app.services.portfolio_service import update_user_portfolio
+from app.services.investment_engine import update_investment_value
 
 router = APIRouter(
     prefix="/investment",
@@ -70,9 +72,57 @@ def list_investments(
 @router.get("/portfolio")
 def get_portfolio(
     db: Session = Depends(get_db),
-    user=Depends(get_current_user)
+    user: User = Depends(get_current_user)
 ):
-    return update_user_portfolio(db, user.id)
+    investments = db.query(Investment).filter(
+        Investment.user_id == user.id
+    ).all()
+
+    total_value = Decimal("0")
+    total_invested = Decimal("0")
+
+    investment_list = []
+
+    for inv in investments:
+
+        # ✅ Update value using your engine
+        current_value = update_investment_value(inv)
+        inv.current_value = current_value
+
+        principal = inv.principal_amount or Decimal("0")
+
+        if inv.is_active:
+         profit = current_value - principal
+        else:
+         profit = inv.realized_profit or 0
+
+        percent = (profit / principal * 100) if principal != 0 else 0
+
+        total_value += current_value
+        total_invested += principal
+
+        investment_list.append({
+            "id": inv.id,
+            "investment_type": inv.investment_type,
+            "principal_amount": float(principal),
+            "current_value": float(current_value),
+            "profit": float(profit),
+            "return_percentage": float(percent),
+            "is_active": inv.is_active,
+            "sell_date": str(inv.sell_date) if inv.sell_date else None
+        })
+
+    total_profit = total_value - total_invested
+    total_percent = (total_profit / total_invested * 100) if total_invested != 0 else 0
+
+    db.commit()  # Save any updates to investments
+
+    return {
+        "portfolio_value": float(total_value),
+        "total_return": float(total_profit),
+        "return_percentage": float(total_percent),
+        "investments": investment_list
+    }
 
 @router.post("/sell/{investment_id}")
 def sell_investment(

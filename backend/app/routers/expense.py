@@ -1,5 +1,4 @@
-from ast import List
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -127,28 +126,41 @@ def expense_summary(
 
 @router.get("/")
 def get_expenses(
+    category_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
 
-    expenses = (
-        db.query(Expense, Category.name.label("category"))
+    query = (
+        db.query(
+            Expense,
+            Category.name.label("category"),
+            Category.id.label("category_id"),
+        )
         .join(Category, Expense.category_id == Category.id)
         .filter(Expense.user_id == current_user.id)
-        .order_by(Expense.date.desc())
-        .limit(10)
-        .all()
     )
 
+    if category_id is not None:
+        query = query.filter(Expense.category_id == category_id)
+
+    query = query.order_by(Expense.date.desc())
+
+    if category_id is None:
+        query = query.limit(10)
+
+    expenses = query.all()
+
     result = []
-    for expense, category_name in expenses:
+    for expense, category_name, category_id in expenses:
         result.append({
             "id": expense.id,
             "amount": expense.amount,
             "date": expense.date,
             "description": expense.description,
             "category": category_name,
-            "auto_categorized": expense.auto_categorized
+            "category_id": category_id,
+            "auto_categorized": expense.auto_categorized,
         })
 
     return {"expenses": result}
