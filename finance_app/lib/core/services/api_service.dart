@@ -296,6 +296,15 @@ class ApiService {
     });
   }
 
+  static Future<Map<String, dynamic>?> linkInvestmentToGoal({
+    required int goalId,
+    required int investmentId,
+  }) async {
+    return await postWithAuth("/goal/$goalId/link-investment", {
+      "investment_id": investmentId,
+    });
+  }
+
   // ==================== INVESTMENT ====================
   static Future<Map<String, dynamic>?> addInvestment({
   required String investmentType,

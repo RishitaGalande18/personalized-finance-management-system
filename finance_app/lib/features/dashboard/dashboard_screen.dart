@@ -14,11 +14,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double income = 0;
   double expense = 0;
   double portfolio = 0;
-  int healthScore = 0;
+  double healthScore = 0;
   Map<String, double> expenseBreakdown = {};
   List alerts = [];
   List recentTransactions = [];
   String userName = "";
+
+  double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '0') ?? 0;
+  }
 
   @override
   void initState() {
@@ -41,18 +46,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     setState(() {
       userName = profile?["name"] ?? "User";
-      income = (incomeData?["total_income"] ?? 0).toDouble();
-      expense = (expenseData?["total_expense"] ?? 0).toDouble();
+      income = _asDouble(incomeData?["total_income"]);
+      expense = _asDouble(expenseData?["total_expense"]);
       if (expenseData?["category_breakdown"] != null) {
         expenseBreakdown = Map<String, double>.from(
           expenseData!["category_breakdown"].map(
-            (key, value) => MapEntry(key, value.toDouble()),
+            (key, value) => MapEntry(key, _asDouble(value)),
           ),
         );
       }
       recentTransactions = expenseList?["expenses"] ?? [];
-      portfolio = (portfolioData?["total_value"] ?? 0).toDouble();
-      healthScore = healthData?["score"] ?? 0;
+      portfolio = _asDouble(
+        portfolioData?["portfolio_value"] ?? portfolioData?["total_value"],
+      );
+      healthScore = _asDouble(healthData?["score"]);
       alerts = alertsData ?? [];
     });
   }
@@ -116,7 +123,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "$healthScore / 100",
+                        "${healthScore.toStringAsFixed(1)} / 100",
                         style: theme.textTheme.displayLarge?.copyWith(
                           color: const Color(0xFF22C55E),
                           fontSize: 32,
@@ -273,7 +280,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            alert.toString(),
+                            alert is Map<String, dynamic>
+                                ? (alert["message"]?.toString() ?? "Alert")
+                                : alert.toString(),
                             style: theme.textTheme.bodyLarge,
                           ),
                         )
