@@ -1,18 +1,20 @@
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
-from datetime import date
+from datetime import date as date_type
 
 
 class GoalCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     target_amount: Decimal = Field(..., gt=0)
-    deadline: date
+    deadline: date_type
     priority: int = Field(..., ge=1, le=5)
 
 
 class GoalResponse(GoalCreate):
     id: int
     saved_amount: Decimal = Decimal("0")
+    investment_contribution: Decimal = Decimal("0")
+    total_saved_amount: Decimal = Decimal("0")
     remaining_amount: Decimal = Decimal("0")
     progress_percentage: Decimal = Decimal("0")
     days_left: int | None = None
@@ -33,8 +35,9 @@ class GoalInvestmentLinkCreate(BaseModel):
 
 class GoalContributionResponse(BaseModel):
     amount: Decimal
-    date: date
+    date: date_type | None = None
     source: str
+    label: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,7 +48,16 @@ class GoalInvestmentLinkResponse(BaseModel):
     investment_id: int
 
 
+class LinkedInvestmentResponse(BaseModel):
+    investment_id: int
+    investment_name: str
+    investment_type: str
+    contribution: Decimal = Decimal("0")
+    is_active: bool
+
+
 class GoalDetailResponse(GoalResponse):
+    linked_investments: list[LinkedInvestmentResponse] = Field(default_factory=list)
     contribution_history: list[GoalContributionResponse] = Field(default_factory=list)
 
 

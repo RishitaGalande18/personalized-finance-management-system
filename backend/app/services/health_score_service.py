@@ -77,7 +77,7 @@ def calculate_health_score(db: Session, user_id: int, user_type: str) -> float:
         ).filter(Debt.user_id == user_id).scalar()
 
         total_investment = db.query(
-            func.coalesce(func.sum(Investment.amount), 0)
+            func.coalesce(func.sum(Investment.principal_amount), 0)
         ).filter(Investment.user_id == user_id).scalar()
 
         total_debt = float(total_debt)
