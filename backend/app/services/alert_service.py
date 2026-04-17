@@ -59,7 +59,7 @@ def generate_alerts(db: Session, user_id: int):
     ).all()
 
     for g in goals:
-        progress = float(g.saved_amount or 0) / float(g.target_amount)
+        progress = float(g.progress_percentage) / 100
 
         days_left = (g.deadline - date.today()).days
         if days_left <= 0:

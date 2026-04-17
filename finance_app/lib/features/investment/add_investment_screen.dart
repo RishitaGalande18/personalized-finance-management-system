@@ -10,46 +10,45 @@ class AddInvestmentScreen extends StatefulWidget {
 }
 
 class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
+
+  final nameController = TextEditingController();
   final principalController = TextEditingController();
-  final rateOfReturnController = TextEditingController();
+  final rateController = TextEditingController();
   final quantityController = TextEditingController();
   final buyPriceController = TextEditingController();
-  
+  final symbolController = TextEditingController();
+
   String selectedType = 'STOCK';
   bool autoUpdate = true;
   bool isLoading = false;
 
   void addInvestment() async {
-    if (principalController.text.isEmpty || rateOfReturnController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Fill all required fields")),
-      );
+
+    if (nameController.text.isEmpty) {
+      showError("Enter investment name");
       return;
     }
 
     setState(() => isLoading = true);
-    
-    int? quantity;
-    double? buyPrice;
-    
-    if (selectedType == 'STOCK') {
-      if (quantityController.text.isEmpty || buyPriceController.text.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Fill all stock fields")),
-        );
-        setState(() => isLoading = false);
-        return;
-      }
-      quantity = int.parse(quantityController.text);
-      buyPrice = double.parse(buyPriceController.text);
-    }
 
     final response = await ApiService.addInvestment(
       investmentType: selectedType,
-      principalAmount: double.parse(principalController.text),
-      rateOfReturn: double.parse(rateOfReturnController.text),
-      quantity: quantity,
-      buyPrice: buyPrice,
+      investmentName: nameController.text,
+      principalAmount: principalController.text.isEmpty
+          ? null
+          : double.parse(principalController.text),
+      rateOfReturn: rateController.text.isEmpty
+          ? null
+          : double.parse(rateController.text),
+      quantity: quantityController.text.isEmpty
+          ? null
+          : double.parse(quantityController.text),
+      buyPrice: buyPriceController.text.isEmpty
+          ? null
+          : double.parse(buyPriceController.text),
+      symbol: symbolController.text.isEmpty
+          ? null
+          : symbolController.text,
       startDate: DateTime.now().toIso8601String().split("T")[0],
       autoUpdate: autoUpdate,
     );
@@ -57,114 +56,109 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
     setState(() => isLoading = false);
 
     if (response != null) {
-      principalController.clear();
-      rateOfReturnController.clear();
-      quantityController.clear();
-      buyPriceController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Investment added successfully")),
-      );
       Navigator.pop(context, true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to add investment")),
-      );
+      showError("Failed to add investment");
     }
+  }
+
+  void showError(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       appBar: AppBar(
         title: const Text("Add Investment"),
         backgroundColor: AppColors.primaryDark,
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+
+            /// TYPE
             DropdownButtonFormField<String>(
               value: selectedType,
-              decoration: const InputDecoration(
-                labelText: "Investment Type",
-                prefixIcon: Icon(Icons.trending_up),
-              ),
+              decoration: const InputDecoration(labelText: "Type"),
               items: const [
                 DropdownMenuItem(value: 'STOCK', child: Text('Stock')),
-                DropdownMenuItem(value: 'BOND', child: Text('Bond')),
-                DropdownMenuItem(value: 'MUTUAL_FUND', child: Text('Mutual Fund')),
-                DropdownMenuItem(value: 'CRYPTO', child: Text('Crypto')),
+                DropdownMenuItem(value: 'FD', child: Text('FD')),
+                DropdownMenuItem(value: 'SIP', child: Text('SIP')),
+                DropdownMenuItem(value: 'GOLD', child: Text('Gold')),
+                DropdownMenuItem(value: 'REAL_ESTATE', child: Text('Real Estate')),
               ],
-              onChanged: (value) => setState(() => selectedType = value ?? 'STOCK'),
+              onChanged: (v) => setState(() => selectedType = v!),
             ),
+
             const SizedBox(height: 15),
+
+            /// NAME
             TextField(
-              controller: principalController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Principal Amount",
-                prefixIcon: Icon(Icons.attach_money),
-              ),
+              controller: nameController,
+              decoration: const InputDecoration(labelText: "Name"),
             ),
+
             const SizedBox(height: 15),
-            TextField(
-              controller: rateOfReturnController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Rate of Return (%)",
-                prefixIcon: Icon(Icons.percent),
+
+            /// PRINCIPAL (not needed for STOCK)
+            if (selectedType != "STOCK")
+              TextField(
+                controller: principalController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Principal"),
               ),
-            ),
-            if (selectedType == 'STOCK') ...[
-              const SizedBox(height: 15),
+
+            /// RATE (FD/SIP only)
+            if (selectedType == "FD" || selectedType == "SIP")
+              TextField(
+                controller: rateController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Rate (%)"),
+              ),
+
+            /// STOCK FIELDS
+            if (selectedType == "STOCK") ...[
               TextField(
                 controller: quantityController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Quantity",
-                  prefixIcon: Icon(Icons.numbers),
-                ),
+                decoration: const InputDecoration(labelText: "Quantity"),
               ),
-              const SizedBox(height: 15),
               TextField(
                 controller: buyPriceController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Buy Price per Unit",
-                  prefixIcon: Icon(Icons.attach_money),
-                ),
+                decoration: const InputDecoration(labelText: "Buy Price"),
+              ),
+              TextField(
+                controller: symbolController,
+                decoration: const InputDecoration(labelText: "Stock Symbol (e.g. AAPL)"),
               ),
             ],
-            const SizedBox(height: 15),
+
+            const SizedBox(height: 20),
+
             CheckboxListTile(
               title: const Text("Auto Update"),
               value: autoUpdate,
-              onChanged: (value) => setState(() => autoUpdate = value ?? true),
+              onChanged: (v) => setState(() => autoUpdate = v!),
             ),
+
             const SizedBox(height: 30),
+
             ElevatedButton(
               onPressed: isLoading ? null : addInvestment,
               child: isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const CircularProgressIndicator()
                   : const Text("Add Investment"),
-            ),
+            )
           ],
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    principalController.dispose();
-    rateOfReturnController.dispose();
-    quantityController.dispose();
-    buyPriceController.dispose();
-    super.dispose();
   }
 }

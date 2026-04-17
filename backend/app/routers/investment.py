@@ -13,6 +13,7 @@ from app.models.user import User
 
 from app.services.portfolio_service import update_user_portfolio
 from app.services.investment_engine import update_investment_value
+from app.schemas import investment
 
 router = APIRouter(
     prefix="/investment",
@@ -21,7 +22,7 @@ router = APIRouter(
 
 # ---------------- CREATE INVESTMENT ----------------
 
-@router.post("", response_model=InvestmentResponse)
+@router.post("")
 def add_investment(
     investment: InvestmentCreate,
     db: Session = Depends(get_db),
@@ -80,47 +81,55 @@ def get_portfolio(
 
     total_value = Decimal("0")
     total_invested = Decimal("0")
+    total_realized = Decimal("0")
 
     investment_list = []
 
     for inv in investments:
 
-        # ✅ Update value using your engine
-        current_value = update_investment_value(inv)
-        inv.current_value = current_value
+        if inv.is_active:
+          current_value = update_investment_value(inv)
+          inv.current_value = current_value
+        else:
+          current_value = inv.current_value or inv.principal_amount
 
         principal = inv.principal_amount or Decimal("0")
 
+        # 🔥 PROFIT LOGIC
         if inv.is_active:
-         profit = current_value - principal
+            unrealized = current_value - principal
+            realized = Decimal("0")
         else:
-         profit = inv.realized_profit or 0
+            unrealized = Decimal("0")
+            realized = inv.realized_profit or Decimal("0")
 
-        percent = (profit / principal * 100) if principal != 0 else 0
+        percent = (unrealized / principal * 100) if principal != 0 else 0
 
         total_value += current_value
         total_invested += principal
+        total_realized += realized
 
         investment_list.append({
             "id": inv.id,
             "investment_type": inv.investment_type,
+            "investment_name": inv.investment_name,
             "principal_amount": float(principal),
             "current_value": float(current_value),
-            "profit": float(profit),
+            "unrealized_profit": float(unrealized),
+            "realized_profit": float(realized),
             "return_percentage": float(percent),
             "is_active": inv.is_active,
             "sell_date": str(inv.sell_date) if inv.sell_date else None
         })
 
-    total_profit = total_value - total_invested
-    total_percent = (total_profit / total_invested * 100) if total_invested != 0 else 0
+    total_unrealized = total_value - total_invested
 
-    db.commit()  # Save any updates to investments
+    db.commit()
 
     return {
         "portfolio_value": float(total_value),
-        "total_return": float(total_profit),
-        "return_percentage": float(total_percent),
+        "total_unrealized": float(total_unrealized),
+        "total_realized": float(total_realized),
         "investments": investment_list
     }
 
@@ -144,7 +153,28 @@ def sell_investment(
 
     investment.sell_price = sell_price
     investment.sell_date = date.today()
-    investment.realized_profit = (sell_price - investment.buy_price) * investment.quantity
+    
+    # TYPE BASED SELL LOGIC
+    if investment.investment_type == "STOCK":
+     investment.realized_profit = (
+        (sell_price - investment.buy_price) * investment.quantity
+    )
+
+    elif investment.investment_type in ["FD", "GOLD", "REAL_ESTATE"]:
+     investment.realized_profit = (
+        sell_price - investment.principal_amount
+    )
+
+    elif investment.investment_type == "SIP":
+     investment.realized_profit = (
+        sell_price - investment.principal_amount
+    )
+
+    else:
+     investment.realized_profit = (
+        sell_price - investment.principal_amount
+    )
+
     investment.is_active = False
 
     db.commit()
@@ -152,4 +182,37 @@ def sell_investment(
     return {
         "message": "Investment sold successfully",
         "profit": investment.realized_profit
+    }
+
+# ---------------- Analytics Api ----------------
+
+@router.get("/analytics")
+def investment_analytics(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    investments = db.query(Investment).filter(
+        Investment.user_id == user.id,
+        Investment.is_active == False
+    ).all()
+
+    monthly = {}
+    yearly = {}
+
+    for inv in investments:
+
+        if not inv.sell_date:
+            continue
+
+        month = inv.sell_date.strftime("%Y-%m")
+        year = inv.sell_date.strftime("%Y")
+
+        profit = float(inv.realized_profit or 0)
+
+        monthly[month] = monthly.get(month, 0) + profit
+        yearly[year] = yearly.get(year, 0) + profit
+
+    return {
+        "monthly_profit": monthly,
+        "yearly_profit": yearly
     }

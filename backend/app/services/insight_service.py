@@ -64,7 +64,7 @@ def generate_insights(db: Session, user_id: int, user_type: str):
     ).all()
 
     for g in goals:
-        progress = float(g.saved_amount or 0) / float(g.target_amount)
+        progress = float(g.progress_percentage) / 100
         if progress < 0.3:
             insights.append({
                 "type": "suggestion",

@@ -7,6 +7,7 @@ from app.models.income import Income
 from app.models.expense import Expense
 from app.models.goal import Goal
 from app.models.goal_allocation import GoalAllocation
+from app.models.goal_contribution import GoalContribution
 
 
 PRIORITY_WEIGHTS = {
@@ -98,8 +99,11 @@ def allocate_monthly_savings(db: Session, user_id: int):
         allocation = min(share, remaining)
 
         if allocation > Decimal("0"):
-
-            goal.saved_amount = Decimal(goal.saved_amount or 0) + allocation
+            db.add(GoalContribution(
+                goal_id=goal.id,
+                amount=allocation,
+                source="manual"
+            ))
 
             db.add(GoalAllocation(
                 user_id=user_id,

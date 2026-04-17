@@ -116,6 +116,7 @@ class ApiService {
   if (response.statusCode == 200 || response.statusCode == 201) {
     return jsonDecode(response.body);
   } else {
+    print("POST $endpoint failed: ${response.statusCode}");
     print(response.body);
     return null;
   }
@@ -242,7 +243,7 @@ class ApiService {
     required String name,
     required double targetAmount,
     required String deadline,
-    required String priority,
+    required int priority,
   }) async {
     return await postWithAuth("/goal", {
       "name": name,
@@ -278,26 +279,47 @@ class ApiService {
     return data != null ? data as List : null;
   }
 
-  // ==================== INVESTMENT ====================
-  static Future<Map<String, dynamic>?> addInvestment({
-    required String investmentType,
-    required double principalAmount,
-    required double rateOfReturn,
-    int? quantity,
-    double? buyPrice,
-    required String startDate,
-    bool autoUpdate = true,
+  static Future<Map<String, dynamic>?> getGoalSummary() async {
+    return await getWithAuth("/goal/summary");
+  }
+
+  static Future<Map<String, dynamic>?> getGoalDetail(int goalId) async {
+    return await getWithAuth("/goal/$goalId");
+  }
+
+  static Future<Map<String, dynamic>?> contributeToGoal({
+    required int goalId,
+    required double amount,
   }) async {
-    return await postWithAuth("/investment", {
-      "investment_type": investmentType,
-      "principal_amount": principalAmount,
-      "rate_of_return": rateOfReturn,
-      "quantity": quantity,
-      "buy_price": buyPrice,
-      "start_date": startDate,
-      "auto_update": autoUpdate,
+    return await postWithAuth("/goal/$goalId/contribute", {
+      "amount": amount,
     });
   }
+
+  // ==================== INVESTMENT ====================
+  static Future<Map<String, dynamic>?> addInvestment({
+  required String investmentType,
+  String? investmentName,
+  double? principalAmount,
+  double? rateOfReturn,
+  double? quantity,   // ✅ FIXED
+  double? buyPrice,
+  String? symbol,
+  required String startDate,
+  bool autoUpdate = true,
+}) async {
+  return await postWithAuth("/investment", {
+    "investment_type": investmentType,
+    if (investmentName != null) "investment_name": investmentName,
+    if (principalAmount != null) "principal_amount": principalAmount,
+    if (rateOfReturn != null) "rate_of_return": rateOfReturn,
+    if (quantity != null) "quantity": quantity,
+    if (buyPrice != null) "buy_price": buyPrice,
+    if (symbol != null) "symbol": symbol,
+    "start_date": startDate,
+    "auto_update": autoUpdate,
+  });
+}
 
   static Future<List<dynamic>?> getInvestments() async {
     try {
@@ -323,6 +345,10 @@ class ApiService {
   static Future<Map<String, dynamic>?> getPortfolio() async {
     return await getWithAuth("/investment/portfolio");
   }
+
+  static Future<Map<String, dynamic>?> getInvestmentAnalytics() async {
+  return await getWithAuth("/investment/analytics");
+}
 
   static Future<Map<String, dynamic>?> sellInvestment({
     required int investmentId,

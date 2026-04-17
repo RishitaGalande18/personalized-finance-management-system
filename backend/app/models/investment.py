@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Date, Numeric, Boolean
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.db.database import Base
 
 class Investment(Base):
@@ -8,7 +9,8 @@ class Investment(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
-    investment_type = Column(String(50), nullable=False)  # FD, SIP, STOCK
+    investment_name = Column(String(100), nullable=True)  # e.g Apple, SBI FD, Gold
+    investment_type = Column(String(50), nullable=False)  # STOCK, FD, SIP, GOLD, REAL_ESTATE
 
     principal_amount = Column(Numeric(12,2), nullable=False)
     current_value = Column(Numeric(12,2), default=0)
@@ -32,3 +34,9 @@ class Investment(Base):
     realized_profit = Column(Numeric(12, 2), nullable=True)
 
     is_active = Column(Boolean, default=True)
+
+    goal_link = relationship(
+        "GoalInvestmentLink",
+        back_populates="investment",
+        uselist=False
+    )

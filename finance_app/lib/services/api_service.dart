@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -150,6 +151,46 @@ class ApiService {
   if (response.statusCode != 200) {
     throw Exception(
       'Unable to load portfolio: ${response.statusCode} ${response.body}'
+    );
+  }
+
+  return jsonDecode(response.body);
+}
+
+static Future<dynamic> addInvestment({
+  required String investmentType,
+  String? investmentName,
+  double? principalAmount,
+  double? rateOfReturn,
+  double? quantity,
+  double? buyPrice,
+  String? symbol,
+  required String startDate,
+  required bool autoUpdate,
+}) async {
+
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token') ?? '';
+
+  final response = await http.post(
+    Uri.parse('$baseUrl/investment'), // ✅ FIXED
+    headers: _authHeaders(token),
+    body: jsonEncode({
+      'investment_type': investmentType,
+      'investment_name': investmentName,
+      'principal_amount': principalAmount,
+      'rate_of_return': rateOfReturn,
+      'quantity': quantity,
+      'buy_price': buyPrice,
+      'symbol': symbol,
+      'start_date': startDate,
+      'auto_update': autoUpdate,
+    }),
+  );
+
+  if (response.statusCode != 200 && response.statusCode != 201) {
+    throw Exception(
+      'Unable to add investment: ${response.statusCode} ${response.body}'
     );
   }
 

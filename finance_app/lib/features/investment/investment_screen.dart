@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../utils/app_colors.dart';
+import 'package:finance_app/core/services/api_service.dart';
+import 'add_investment_screen.dart';
 
 class InvestmentPortfolioScreen extends StatefulWidget {
   const InvestmentPortfolioScreen({super.key});
@@ -19,126 +20,167 @@ class _InvestmentPortfolioScreenState
   Map<String, dynamic>? portfolio;
   bool isLoading = true;
 
-  static const baseUrl = "http://192.168.31.109:8000";
+  Map<String, dynamic>? analytics;
+  String selectedMode = "monthly";
+  String selectedKey = "";
+
+  static const baseUrl = "http://localhost:8000";
 
   @override
   void initState() {
     super.initState();
     loadPortfolio();
+    loadAnalytics();
   }
 
-  // 🔑 Get Token
   Future<String> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString("token") ?? "";
   }
 
-  // 🔢 Parse helper
-  double parseAmount(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString()) ?? 0;
-  }
+  double parse(dynamic v) => (v ?? 0).toDouble();
 
-  // 🚀 Load Portfolio
   Future<void> loadPortfolio() async {
-    setState(() => isLoading = true);
-
     final token = await getToken();
 
-    final response = await http.get(
+    final res = await http.get(
       Uri.parse("$baseUrl/investment/portfolio"),
-      headers: {
-        "Authorization": "Bearer $token",
-        "Content-Type": "application/json",
-      },
+      headers: {"Authorization": "Bearer $token"},
     );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
       setState(() {
         portfolio = data;
-        investments = data["investments"] ?? [];
+        investments = data["investments"];
         isLoading = false;
       });
-    } else {
-      print("Error: ${response.body}");
-      setState(() => isLoading = false);
     }
   }
 
-  // 💰 Sell Dialog
-  void _showSellDialog(int id) {
+  Future<void> loadAnalytics() async {
+  final data = await ApiService.getInvestmentAnalytics();
+
+  if (data != null) {
+    final monthly = data["monthly_profit"] ?? {};
+    final yearly = data["yearly_profit"] ?? {};
+
+    if (!mounted) return; 
+
+    setState(() {
+      analytics = data;
+
+      if (monthly.isNotEmpty) {
+        selectedKey = monthly.keys.first;
+        selectedMode = "monthly";
+      } else if (yearly.isNotEmpty) {
+        selectedKey = yearly.keys.first;
+        selectedMode = "yearly";
+      } else {
+        selectedKey = "";
+      }
+    });
+  }
+}
+
+double getSelectedProfit() {
+  if (analytics == null || selectedKey.isEmpty) return 0;
+
+  final map = selectedMode == "monthly"
+      ? (analytics!["monthly_profit"] ?? {})
+      : (analytics!["yearly_profit"] ?? {});
+
+  return (map[selectedKey] ?? 0).toDouble();
+}
+
+  // 🔥 ACTION LABEL
+  String getAction(String type) {
+    switch (type) {
+      case "FD":
+        return "Withdraw";
+      case "SIP":
+        return "Stop";
+      case "REAL_ESTATE":
+        return "Sell Property";
+      case "GOLD":
+        return "Sell Gold";
+      default:
+        return "Sell";
+    }
+  }
+
+  // 🔥 SELL / ACTION
+  void handleAction(int id) {
     final controller = TextEditingController();
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Sell Investment"),
+        title: const Text("Enter Sell Value"),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            hintText: "Enter sell price",
-          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () async {
               final token = await getToken();
-              final price = double.tryParse(controller.text);
 
-              if (price != null) {
-                await http.post(
-                  Uri.parse("$baseUrl/investment/sell/$id"),
-                  headers: {
-                    "Authorization": "Bearer $token",
-                    "Content-Type": "application/json",
-                  },
-                  body: jsonEncode({"sell_price": price}),
-                );
+              await http.post(
+                Uri.parse("$baseUrl/investment/sell/$id"),
+                headers: {
+                  "Authorization": "Bearer $token",
+                  "Content-Type": "application/json"
+                },
+                body: jsonEncode({
+                  "sell_price": double.parse(controller.text)
+                }),
+              );
 
-                Navigator.pop(context);
-                loadPortfolio();
-              }
+              Navigator.pop(context);
+              loadPortfolio();
             },
-            child: const Text("Sell"),
-          ),
+            child: const Text("Confirm"),
+          )
         ],
       ),
     );
   }
 
-  // 📊 Split data
-  List get activeInvestments =>
-      investments.where((i) => i["is_active"] == true).toList();
+  List get active =>
+      investments.where((e) => e["is_active"] == true).toList();
 
-  List get soldInvestments =>
-      investments.where((i) => i["is_active"] == false).toList();
+  List get sold =>
+      investments.where((e) => e["is_active"] == false).toList();
 
   @override
   Widget build(BuildContext context) {
 
-    final total = parseAmount(portfolio?["portfolio_value"]);
-    final profit = parseAmount(portfolio?["total_return"]);
-    final percent = parseAmount(portfolio?["return_percentage"]);
+    final total = parse(portfolio?["portfolio_value"]);
+    final unrealized = parse(portfolio?["total_unrealized"]);
+    final realized = parse(portfolio?["total_realized"]);
 
     return Scaffold(
-      backgroundColor: AppColors.bgDark,
+      backgroundColor: const Color(0xFF0B1E3C),
+      appBar: AppBar(title: const Text("Investments")),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue,
+        onPressed: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const AddInvestmentScreen(),
+            ),
+          );
 
-      appBar: AppBar(
-        title: const Text("Investments"),
-        backgroundColor: AppColors.primaryDark,
-        actions: [
-          IconButton(
-            onPressed: loadPortfolio,
-            icon: const Icon(Icons.refresh),
-          )
-        ],
+          if (result == true) {
+            loadPortfolio();
+          }
+        },
+        child: const Icon(Icons.add),
       ),
 
       body: isLoading
@@ -160,33 +202,114 @@ class _InvestmentPortfolioScreenState
                     ),
                     child: Column(
                       children: [
-                        const Text("Total Portfolio Value",
+
+                        const Text("Total Value",
                             style: TextStyle(color: Colors.white70)),
 
-                        const SizedBox(height: 10),
-
-                        Text(
-                          "₹${total.toStringAsFixed(2)}",
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        Text("₹${total.toStringAsFixed(0)}",
+                            style: const TextStyle(
+                                fontSize: 26, color: Colors.white)),
 
                         const SizedBox(height: 10),
 
-                        Text(
-                          "₹${profit.toStringAsFixed(2)} (${percent.toStringAsFixed(2)}%)",
-                          style: TextStyle(
-                            color: profit >= 0 ? Colors.green : Colors.red,
-                          ),
-                        ),
+                        Text("Unrealized: ₹${unrealized.toStringAsFixed(0)}",
+                            style: const TextStyle(color: Colors.green)),
+
+                        Text("Realized: ₹${realized.toStringAsFixed(0)}",
+                            style: const TextStyle(color: Colors.orange)),
                       ],
                     ),
                   ),
 
-                  /// 🔥 TABS
+                  Container(
+  margin: const EdgeInsets.symmetric(horizontal: 16),
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: const Color(0xFF1E2E4A),
+    borderRadius: BorderRadius.circular(16),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+
+      const Text(
+        "Investment Analytics",
+        style: TextStyle(color: Colors.white70),
+      ),
+
+      const SizedBox(height: 10),
+
+      /// TOGGLE
+      Row(
+        children: [
+          ChoiceChip(
+            label: const Text("Monthly"),
+            selected: selectedMode == "monthly",
+            onSelected: (_) {
+              setState(() {
+                selectedMode = "monthly";
+                selectedKey = analytics?["monthly_profit"]?.keys.first ?? "";
+              });
+            },
+          ),
+          const SizedBox(width: 10),
+          ChoiceChip(
+            label: const Text("Yearly"),
+            selected: selectedMode == "yearly",
+            onSelected: (_) {
+              setState(() {
+                selectedMode = "yearly";
+                selectedKey = analytics?["yearly_profit"]?.keys.first ?? "";
+              });
+            },
+          ),
+        ],
+      ),
+
+      const SizedBox(height: 10),
+
+      /// DROPDOWN
+      Builder(
+  builder: (context) {
+    Map<String, dynamic> dataMap =
+        selectedMode == "monthly"
+            ? (analytics?["monthly_profit"] ?? {})
+            : (analytics?["yearly_profit"] ?? {});
+
+    return DropdownButton<String>(
+      value: selectedKey.isEmpty ? null : selectedKey,
+      dropdownColor: const Color(0xFF1E2E4A),
+      hint: const Text("Select period",
+          style: TextStyle(color: Colors.white)),
+      items: dataMap.keys.map<DropdownMenuItem<String>>((key) {
+        return DropdownMenuItem(
+          value: key,
+          child: Text(key,
+              style: const TextStyle(color: Colors.white)),
+        );
+      }).toList(),
+      onChanged: (value) {
+        setState(() => selectedKey = value ?? "");
+      },
+    );
+  },
+),
+
+      const SizedBox(height: 10),
+
+      /// PROFIT DISPLAY
+      Text(
+        "Profit: ₹${getSelectedProfit()}",
+        style: const TextStyle(
+          color: Colors.green,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      )
+    ],
+  ),
+),
+
                   const TabBar(
                     tabs: [
                       Tab(text: "Active"),
@@ -194,170 +317,80 @@ class _InvestmentPortfolioScreenState
                     ],
                   ),
 
-                  /// 🔥 CONTENT
                   Expanded(
                     child: TabBarView(
                       children: [
-                        _buildActiveInvestments(),
-                        _buildSoldInvestments(),
+                        _activeList(),
+                        _soldList(),
                       ],
                     ),
-                  ),
+                  )
                 ],
               ),
             ),
     );
   }
 
-  // 🟢 ACTIVE TAB
-  Widget _buildActiveInvestments() {
-    if (activeInvestments.isEmpty) {
-      return const Center(
-        child: Text("No active investments",
-            style: TextStyle(color: Colors.white70)),
-      );
+  // 🔵 ACTIVE
+  Widget _activeList() {
+    if (active.isEmpty) {
+      return const Center(child: Text("No active investments"));
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: activeInvestments.length,
-      itemBuilder: (context, index) {
+      itemCount: active.length,
+      itemBuilder: (_, i) {
 
-        final inv = activeInvestments[index];
+        final inv = active[i];
 
-        final principal = parseAmount(inv["principal_amount"]);
-        final current = parseAmount(inv["current_value"]);
-        final profit = parseAmount(inv["profit"]);
+        final p = parse(inv["principal_amount"]);
+        final c = parse(inv["current_value"]);
+        final u = parse(inv["unrealized_profit"]);
 
-        return _investmentCard(inv, principal, current, profit, true);
-      },
-    );
-  }
-
-  // 🔴 SOLD TAB (TIMELINE)
-  Widget _buildSoldInvestments() {
-
-    if (soldInvestments.isEmpty) {
-      return const Center(
-        child: Text("No sold investments",
-            style: TextStyle(color: Colors.white70)),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: soldInvestments.length,
-      itemBuilder: (context, index) {
-        return _soldTimelineItem(soldInvestments[index]);
-      },
-    );
-  }
-
-  // 📍 TIMELINE ITEM
-  Widget _soldTimelineItem(dynamic inv) {
-
-    final profit = parseAmount(inv["profit"]);
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-
-        Column(
-          children: [
-            Container(width: 2, height: 20, color: Colors.grey),
-            const CircleAvatar(radius: 6, backgroundColor: Colors.red),
-            Container(width: 2, height: 80, color: Colors.grey),
-          ],
-        ),
-
-        const SizedBox(width: 12),
-
-        Expanded(
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E2E4A),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
+        return Card(
+          color: const Color(0xFF1E2E4A),
+          child: ListTile(
+            title: Text(inv["investment_name"] ?? inv["investment_type"],
+                style: const TextStyle(color: Colors.white)),
+            subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                Text(inv["investment_type"],
-                    style: const TextStyle(color: Colors.white)),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  "Profit: ₹${profit.toStringAsFixed(0)}",
-                  style: TextStyle(
-                    color: profit >= 0 ? Colors.green : Colors.red,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  "Date: ${inv["sell_date"] ?? "N/A"}",
-                  style: const TextStyle(color: Colors.white38),
-                ),
+                Text("₹${p.toStringAsFixed(0)} → ₹${c.toStringAsFixed(0)}",
+                    style: const TextStyle(color: Colors.white70)),
+                Text("Unrealized: ₹${u.toStringAsFixed(0)}",
+                    style: const TextStyle(color: Colors.green)),
               ],
             ),
+            trailing: ElevatedButton(
+              onPressed: () => handleAction(inv["id"]),
+              child: Text(getAction(inv["investment_type"])),
+            ),
           ),
-        )
-      ],
+        );
+      },
     );
   }
 
-  // 📦 CARD
-  Widget _investmentCard(
-      dynamic inv,
-      double principal,
-      double current,
-      double profit,
-      bool showSell) {
+  // 🔴 SOLD (TIMELINE)
+  Widget _soldList() {
+    if (sold.isEmpty) {
+      return const Center(child: Text("No sold investments"));
+    }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E2E4A),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return ListView.builder(
+      itemCount: sold.length,
+      itemBuilder: (_, i) {
 
-          Text(inv["investment_type"],
-              style: const TextStyle(color: Colors.white)),
+        final inv = sold[i];
+        final r = parse(inv["realized_profit"]);
 
-          const SizedBox(height: 10),
-
-          Text(
-            "₹${principal.toStringAsFixed(0)} → ₹${current.toStringAsFixed(0)}",
-            style: const TextStyle(color: Colors.white70),
-          ),
-
-          const SizedBox(height: 6),
-
-          Text(
-            "₹${profit.toStringAsFixed(0)}",
-            style: TextStyle(
-              color: profit >= 0 ? Colors.green : Colors.red,
-            ),
-          ),
-
-          if (showSell)
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton(
-                onPressed: () => _showSellDialog(inv["id"]),
-                child: const Text("Sell"),
-              ),
-            ),
-        ],
-      ),
+        return ListTile(
+          leading: const Icon(Icons.timeline, color: Colors.red),
+          title: Text(inv["investment_name"] ?? inv["investment_type"]),
+          subtitle: Text(
+              "Profit ₹${r.toStringAsFixed(0)} • ${inv["sell_date"] ?? ""}"),
+        );
+      },
     );
   }
 }

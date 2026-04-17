@@ -26,5 +26,11 @@ def update_investment_value(investment):
             investment.buy_price,
             investment.symbol
         )
+    
+    elif investment.investment_type == "GOLD":
+        return investment.principal_amount  # can later add live gold API
+
+    elif investment.investment_type == "REAL_ESTATE":
+        return investment.principal_amount  # manual value for now
 
     return investment.principal_amount
