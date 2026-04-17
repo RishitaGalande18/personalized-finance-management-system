@@ -53,7 +53,7 @@ def calculate_health_score(db: Session, user_id: int, user_type: str) -> float:
 
     if goals:
         progress_values = [
-            float(g.saved_amount) / float(g.target_amount)
+            float(g.saved_amount or 0) / float(g.target_amount)
             for g in goals
         ]
         avg_progress = sum(progress_values) / len(progress_values)

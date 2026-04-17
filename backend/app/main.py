@@ -2,13 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, income, expense, goal, category, insights, investment, debt, health, alert
 from app.core.scheduler import start_scheduler
+from app.db.base import create_tables
 
 
 app = FastAPI(title="Personalized Finance Management System")
+create_tables()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

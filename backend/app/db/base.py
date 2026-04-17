@@ -6,6 +6,8 @@ from app.models.income import Income
 from app.models.expense import Expense
 from app.models.category import Category
 from app.models.goal import Goal
+from app.models.goal_contribution import GoalContribution
+from app.models.goal_investment_link import GoalInvestmentLink
 from app.models.investment import Investment
 from app.models.debt import Debt
 from app.models.alert import Alert
