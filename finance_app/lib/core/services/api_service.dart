@@ -372,14 +372,27 @@ class ApiService {
   static Future<Map<String, dynamic>?> addDebt({
     required String debtType,
     required double principalAmount,
+    required double emiAmount,
     required double interestRate,
     required String dueDate,
   }) async {
     return await postWithAuth("/debt", {
       "debt_type": debtType,
       "principal_amount": principalAmount,
+      "emi_amount": emiAmount,
       "interest_rate": interestRate,
       "due_date": dueDate,
+    });
+  }
+
+  static Future<Map<String, dynamic>?> addDebtPayment({
+    required int debtId,
+    required double amount,
+    String? paymentDate,
+  }) async {
+    return await postWithAuth("/debt/$debtId/payment", {
+      "amount": amount,
+      if (paymentDate != null) "payment_date": paymentDate,
     });
   }
 
@@ -387,7 +400,7 @@ class ApiService {
     try {
       final token = await getToken();
       final response = await http.get(
-        Uri.parse("$baseUrl/debt/"),
+        Uri.parse("$baseUrl/debt"),
         headers: {
           "Authorization": "Bearer $token",
           "Content-Type": "application/json",

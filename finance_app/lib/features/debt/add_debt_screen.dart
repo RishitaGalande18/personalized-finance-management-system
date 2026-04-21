@@ -11,6 +11,7 @@ class AddDebtScreen extends StatefulWidget {
 
 class _AddDebtScreenState extends State<AddDebtScreen> {
   final principalController = TextEditingController();
+  final emiAmountController = TextEditingController();
   final interestRateController = TextEditingController();
   final dueDateController = TextEditingController();
   
@@ -35,6 +36,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
 
   void addDebt() async {
     if (principalController.text.isEmpty || 
+        emiAmountController.text.isEmpty ||
         interestRateController.text.isEmpty || 
         dueDateController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -48,6 +50,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
     final response = await ApiService.addDebt(
       debtType: selectedDebtType,
       principalAmount: double.parse(principalController.text),
+      emiAmount: double.parse(emiAmountController.text),
       interestRate: double.parse(interestRateController.text),
       dueDate: dueDateController.text,
     );
@@ -56,6 +59,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
 
     if (response != null) {
       principalController.clear();
+      emiAmountController.clear();
       interestRateController.clear();
       dueDateController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -107,6 +111,15 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
             ),
             const SizedBox(height: 15),
             TextField(
+              controller: emiAmountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: "Monthly EMI Amount",
+                prefixIcon: Icon(Icons.payments_outlined),
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
               controller: interestRateController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
@@ -148,6 +161,7 @@ class _AddDebtScreenState extends State<AddDebtScreen> {
   @override
   void dispose() {
     principalController.dispose();
+    emiAmountController.dispose();
     interestRateController.dispose();
     dueDateController.dispose();
     super.dispose();

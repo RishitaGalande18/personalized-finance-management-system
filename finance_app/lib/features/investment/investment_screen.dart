@@ -1,8 +1,10 @@
 import 'dart:convert';
+
+import 'package:finance_app/core/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:finance_app/core/services/api_service.dart';
+
 import 'add_investment_screen.dart';
 
 class InvestmentPortfolioScreen extends StatefulWidget {
@@ -13,18 +15,15 @@ class InvestmentPortfolioScreen extends StatefulWidget {
       _InvestmentPortfolioScreenState();
 }
 
-class _InvestmentPortfolioScreenState
-    extends State<InvestmentPortfolioScreen> {
+class _InvestmentPortfolioScreenState extends State<InvestmentPortfolioScreen> {
+  static const baseUrl = "http://localhost:8000";
 
-  List investments = [];
+  List<dynamic> investments = [];
   Map<String, dynamic>? portfolio;
-  bool isLoading = true;
-
   Map<String, dynamic>? analytics;
+  bool isLoading = true;
   String selectedMode = "monthly";
   String selectedKey = "";
-
-  static const baseUrl = "http://localhost:8000";
 
   @override
   void initState() {
@@ -38,62 +37,70 @@ class _InvestmentPortfolioScreenState
     return prefs.getString("token") ?? "";
   }
 
-  double parse(dynamic v) => (v ?? 0).toDouble();
+  double parse(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? "0") ?? 0;
+  }
+
+  String money(dynamic value) => "Rs. ${parse(value).toStringAsFixed(0)}";
 
   Future<void> loadPortfolio() async {
-    final token = await getToken();
+    try {
+      final token = await getToken();
+      final res = await http.get(
+        Uri.parse("$baseUrl/investment/portfolio"),
+        headers: {"Authorization": "Bearer $token"},
+      );
 
-    final res = await http.get(
-      Uri.parse("$baseUrl/investment/portfolio"),
-      headers: {"Authorization": "Bearer $token"},
-    );
+      if (!mounted) return;
 
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      setState(() {
-        portfolio = data;
-        investments = data["investments"];
-        isLoading = false;
-      });
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        setState(() {
+          portfolio = data;
+          investments = (data["investments"] as List?) ?? [];
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      debugPrint("Error loading portfolio: $e");
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   Future<void> loadAnalytics() async {
-  final data = await ApiService.getInvestmentAnalytics();
+    final data = await ApiService.getInvestmentAnalytics();
+    if (data == null || !mounted) return;
 
-  if (data != null) {
-    final monthly = data["monthly_profit"] ?? {};
-    final yearly = data["yearly_profit"] ?? {};
-
-    if (!mounted) return; 
+    final monthly = (data["monthly_profit"] as Map?) ?? {};
+    final yearly = (data["yearly_profit"] as Map?) ?? {};
 
     setState(() {
       analytics = data;
-
       if (monthly.isNotEmpty) {
-        selectedKey = monthly.keys.first;
         selectedMode = "monthly";
+        selectedKey = monthly.keys.first.toString();
       } else if (yearly.isNotEmpty) {
-        selectedKey = yearly.keys.first;
         selectedMode = "yearly";
+        selectedKey = yearly.keys.first.toString();
       } else {
         selectedKey = "";
       }
     });
   }
-}
 
-double getSelectedProfit() {
-  if (analytics == null || selectedKey.isEmpty) return 0;
+  double getSelectedProfit() {
+    if (analytics == null || selectedKey.isEmpty) return 0;
 
-  final map = selectedMode == "monthly"
-      ? (analytics!["monthly_profit"] ?? {})
-      : (analytics!["yearly_profit"] ?? {});
+    final map = selectedMode == "monthly"
+        ? (analytics!["monthly_profit"] as Map? ?? {})
+        : (analytics!["yearly_profit"] as Map? ?? {});
 
-  return (map[selectedKey] ?? 0).toDouble();
-}
+    return parse(map[selectedKey]);
+  }
 
-  // 🔥 ACTION LABEL
   String getAction(String type) {
     switch (type) {
       case "FD":
@@ -109,288 +116,458 @@ double getSelectedProfit() {
     }
   }
 
-  // 🔥 SELL / ACTION
-  void handleAction(int id) {
+  Future<void> handleAction(int id) async {
     final controller = TextEditingController();
 
-    showDialog(
+    final confirmed = await showDialog<double>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Enter Sell Value"),
         content: TextField(
           controller: controller,
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: "Sell value"),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
-            onPressed: () async {
-              final token = await getToken();
-
-              await http.post(
-                Uri.parse("$baseUrl/investment/sell/$id"),
-                headers: {
-                  "Authorization": "Bearer $token",
-                  "Content-Type": "application/json"
-                },
-                body: jsonEncode({
-                  "sell_price": double.parse(controller.text)
-                }),
-              );
-
-              Navigator.pop(context);
-              loadPortfolio();
+            onPressed: () {
+              final value = double.tryParse(controller.text.trim());
+              if (value == null || value <= 0) return;
+              Navigator.pop(context, value);
             },
             child: const Text("Confirm"),
-          )
+          ),
         ],
       ),
     );
+
+    controller.dispose();
+    if (confirmed == null) return;
+
+    final token = await getToken();
+    await http.post(
+      Uri.parse("$baseUrl/investment/sell/$id"),
+      headers: {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({"sell_price": confirmed}),
+    );
+
+    if (mounted) loadPortfolio();
   }
 
-  List get active =>
-      investments.where((e) => e["is_active"] == true).toList();
+  List<dynamic> get active =>
+      investments.where((item) => item["is_active"] == true).toList();
 
-  List get sold =>
-      investments.where((e) => e["is_active"] == false).toList();
+  List<dynamic> get sold =>
+      investments.where((item) => item["is_active"] == false).toList();
 
   @override
   Widget build(BuildContext context) {
-
     final total = parse(portfolio?["portfolio_value"]);
     final unrealized = parse(portfolio?["total_unrealized"]);
     final realized = parse(portfolio?["total_realized"]);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B1E3C),
-      appBar: AppBar(title: const Text("Investments")),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blue,
+      appBar: AppBar(
+        title: const Text("Investments"),
+        backgroundColor: const Color(0xFF0B1E3C),
+        elevation: 0,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF3D7DFF),
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const AddInvestmentScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const AddInvestmentScreen()),
           );
 
           if (result == true) {
             loadPortfolio();
+            loadAnalytics();
           }
         },
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text("Add"),
       ),
-
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : DefaultTabController(
               length: 2,
-              child: Column(
-                children: [
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final headerHeight =
+                      (constraints.maxHeight * 0.35).clamp(160.0, 210.0);
 
-                  /// 🔥 PORTFOLIO CARD
-                  Container(
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF17396C), Color(0xFF0E274D)],
+                  return Column(
+                    children: [
+                      SizedBox(
+                        height: headerHeight,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          child: Column(
+                            children: [
+                              _portfolioCard(total, unrealized, realized),
+                              const SizedBox(height: 10),
+                              _analyticsCard(),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      children: [
-
-                        const Text("Total Value",
-                            style: TextStyle(color: Colors.white70)),
-
-                        Text("₹${total.toStringAsFixed(0)}",
-                            style: const TextStyle(
-                                fontSize: 26, color: Colors.white)),
-
-                        const SizedBox(height: 10),
-
-                        Text("Unrealized: ₹${unrealized.toStringAsFixed(0)}",
-                            style: const TextStyle(color: Colors.green)),
-
-                        Text("Realized: ₹${realized.toStringAsFixed(0)}",
-                            style: const TextStyle(color: Colors.orange)),
-                      ],
-                    ),
-                  ),
-
-                  Container(
-  margin: const EdgeInsets.symmetric(horizontal: 16),
-  padding: const EdgeInsets.all(16),
-  decoration: BoxDecoration(
-    color: const Color(0xFF1E2E4A),
-    borderRadius: BorderRadius.circular(16),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-
-      const Text(
-        "Investment Analytics",
-        style: TextStyle(color: Colors.white70),
-      ),
-
-      const SizedBox(height: 10),
-
-      /// TOGGLE
-      Row(
-        children: [
-          ChoiceChip(
-            label: const Text("Monthly"),
-            selected: selectedMode == "monthly",
-            onSelected: (_) {
-              setState(() {
-                selectedMode = "monthly";
-                selectedKey = analytics?["monthly_profit"]?.keys.first ?? "";
-              });
-            },
-          ),
-          const SizedBox(width: 10),
-          ChoiceChip(
-            label: const Text("Yearly"),
-            selected: selectedMode == "yearly",
-            onSelected: (_) {
-              setState(() {
-                selectedMode = "yearly";
-                selectedKey = analytics?["yearly_profit"]?.keys.first ?? "";
-              });
-            },
-          ),
-        ],
-      ),
-
-      const SizedBox(height: 10),
-
-      /// DROPDOWN
-      Builder(
-  builder: (context) {
-    Map<String, dynamic> dataMap =
-        selectedMode == "monthly"
-            ? (analytics?["monthly_profit"] ?? {})
-            : (analytics?["yearly_profit"] ?? {});
-
-    return DropdownButton<String>(
-      value: selectedKey.isEmpty ? null : selectedKey,
-      dropdownColor: const Color(0xFF1E2E4A),
-      hint: const Text("Select period",
-          style: TextStyle(color: Colors.white)),
-      items: dataMap.keys.map<DropdownMenuItem<String>>((key) {
-        return DropdownMenuItem(
-          value: key,
-          child: Text(key,
-              style: const TextStyle(color: Colors.white)),
-        );
-      }).toList(),
-      onChanged: (value) {
-        setState(() => selectedKey = value ?? "");
-      },
-    );
-  },
-),
-
-      const SizedBox(height: 10),
-
-      /// PROFIT DISPLAY
-      Text(
-        "Profit: ₹${getSelectedProfit()}",
-        style: const TextStyle(
-          color: Colors.green,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      )
-    ],
-  ),
-),
-
-                  const TabBar(
-                    tabs: [
-                      Tab(text: "Active"),
-                      Tab(text: "Sold"),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        child: _tabBar(),
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            _investmentList(active, showAction: true),
+                            _investmentList(sold, showAction: false),
+                          ],
+                        ),
+                      ),
                     ],
-                  ),
-
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        _activeList(),
-                        _soldList(),
-                      ],
-                    ),
-                  )
-                ],
+                  );
+                },
               ),
             ),
     );
   }
 
-  // 🔵 ACTIVE
-  Widget _activeList() {
-    if (active.isEmpty) {
-      return const Center(child: Text("No active investments"));
-    }
+  Widget _tabBar() {
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: const Color(0xFF12284A),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const TabBar(
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: Color(0xFF3D7DFF),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        dividerColor: Colors.transparent,
+        labelColor: Colors.white,
+        unselectedLabelColor: Colors.white70,
+        tabs: [
+          Tab(text: "Active"),
+          Tab(text: "Sold"),
+        ],
+      ),
+    );
+  }
 
-    return ListView.builder(
-      itemCount: active.length,
-      itemBuilder: (_, i) {
-
-        final inv = active[i];
-
-        final p = parse(inv["principal_amount"]);
-        final c = parse(inv["current_value"]);
-        final u = parse(inv["unrealized_profit"]);
-
-        return Card(
-          color: const Color(0xFF1E2E4A),
-          child: ListTile(
-            title: Text(inv["investment_name"] ?? inv["investment_type"],
-                style: const TextStyle(color: Colors.white)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("₹${p.toStringAsFixed(0)} → ₹${c.toStringAsFixed(0)}",
-                    style: const TextStyle(color: Colors.white70)),
-                Text("Unrealized: ₹${u.toStringAsFixed(0)}",
-                    style: const TextStyle(color: Colors.green)),
-              ],
-            ),
-            trailing: ElevatedButton(
-              onPressed: () => handleAction(inv["id"]),
-              child: Text(getAction(inv["investment_type"])),
+  Widget _portfolioCard(double total, double unrealized, double realized) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF17396C), Color(0xFF0E274D)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Total Portfolio Value",
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            money(total),
+            style: const TextStyle(
+              fontSize: 28,
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
             ),
           ),
-        );
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _summaryTile(
+                  "Unrealized",
+                  money(unrealized),
+                  const Color(0xFF59D78F),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _summaryTile(
+                  "Realized",
+                  money(realized),
+                  const Color(0xFFFFB35C),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryTile(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white60)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _analyticsCard() {
+    final map = selectedMode == "monthly"
+        ? (analytics?["monthly_profit"] as Map? ?? {})
+        : (analytics?["yearly_profit"] as Map? ?? {});
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2E4A),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Investment Analytics",
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ChoiceChip(
+                label: const Text("Monthly"),
+                selected: selectedMode == "monthly",
+                onSelected: (_) => _selectAnalyticsMode("monthly"),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text("Yearly"),
+                selected: selectedMode == "yearly",
+                onSelected: (_) => _selectAnalyticsMode("yearly"),
+              ),
+              const Spacer(),
+              Text(
+                money(getSelectedProfit()),
+                style: const TextStyle(
+                  color: Color(0xFF59D78F),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: selectedKey.isEmpty ? null : selectedKey,
+            dropdownColor: const Color(0xFF1E2E4A),
+            decoration: const InputDecoration(
+              labelText: "Period",
+              isDense: true,
+            ),
+            items: map.keys.map<DropdownMenuItem<String>>((key) {
+              final value = key.toString();
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selectedKey = value ?? ""),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _selectAnalyticsMode(String mode) {
+    final map = mode == "monthly"
+        ? (analytics?["monthly_profit"] as Map? ?? {})
+        : (analytics?["yearly_profit"] as Map? ?? {});
+
+    setState(() {
+      selectedMode = mode;
+      selectedKey = map.isEmpty ? "" : map.keys.first.toString();
+    });
+  }
+
+  Widget _investmentList(List<dynamic> items, {required bool showAction}) {
+    if (items.isEmpty) {
+      return Center(
+        child: Text(
+          showAction ? "No active investments" : "No sold investments",
+          style: const TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, index) {
+        final investment = items[index] as Map<String, dynamic>;
+        return showAction
+            ? _activeInvestmentCard(investment)
+            : _soldInvestmentCard(investment);
       },
     );
   }
 
-  // 🔴 SOLD (TIMELINE)
-  Widget _soldList() {
-    if (sold.isEmpty) {
-      return const Center(child: Text("No sold investments"));
-    }
+  Widget _activeInvestmentCard(Map<String, dynamic> investment) {
+    final principal = parse(investment["principal_amount"]);
+    final current = parse(investment["current_value"]);
+    final unrealized = parse(investment["unrealized_profit"]);
+    final type = investment["investment_type"]?.toString() ?? "Investment";
+    final name = investment["investment_name"]?.toString() ?? type;
 
-    return ListView.builder(
-      itemCount: sold.length,
-      itemBuilder: (_, i) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2E4A),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2F456B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.trending_up_rounded, color: Color(0xFF59D78F)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => handleAction(investment["id"]),
+                child: Text(getAction(type)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _infoChip("Invested", money(principal)),
+              _infoChip("Current", money(current)),
+              _infoChip("Unrealized", money(unrealized)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-        final inv = sold[i];
-        final r = parse(inv["realized_profit"]);
+  Widget _soldInvestmentCard(Map<String, dynamic> investment) {
+    final realized = parse(investment["realized_profit"]);
+    final type = investment["investment_type"]?.toString() ?? "Investment";
+    final name = investment["investment_name"]?.toString() ?? type;
 
-        return ListTile(
-          leading: const Icon(Icons.timeline, color: Colors.red),
-          title: Text(inv["investment_name"] ?? inv["investment_type"]),
-          subtitle: Text(
-              "Profit ₹${r.toStringAsFixed(0)} • ${inv["sell_date"] ?? ""}"),
-        );
-      },
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2E4A),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2F456B)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.timeline_rounded, color: Color(0xFFFF6B6B)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  investment["sell_date"]?.toString() ?? "",
+                  style: const TextStyle(color: Colors.white60),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            money(realized),
+            style: const TextStyle(
+              color: Color(0xFFFFB35C),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12284A),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: "$label: ",
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
