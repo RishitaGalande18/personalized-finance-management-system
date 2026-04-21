@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Column,
+    Boolean,
     Integer,
     String,
     Date,
@@ -22,11 +23,14 @@ class Debt(Base):
 
     # Financial precision
     principal_amount = Column(Numeric(10, 2), nullable=False)
+    remaining_amount = Column(Numeric(10, 2), nullable=False)
+    emi_amount = Column(Numeric(10, 2), nullable=True)
 
     # Annual interest rate percentage (e.g. 12.50%)
     interest_rate = Column(Numeric(5, 2), nullable=True)
 
     due_date = Column(Date, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
 
     created_at = Column(
         DateTime(timezone=True),
@@ -40,3 +44,8 @@ class Debt(Base):
 
     # ORM relationship
     user = relationship("User", backref="debts")
+    payments = relationship(
+        "DebtPayment",
+        back_populates="debt",
+        cascade="all, delete-orphan"
+    )
