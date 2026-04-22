@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, income, expense, goal, category, insights, investment, debt, health, alert
-from app.core.scheduler import start_scheduler
+# from app.core.scheduler import start_scheduler
 from app.db.base import create_tables
 
 
